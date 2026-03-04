@@ -82,30 +82,39 @@ async def reset_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- USER COMMANDS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Kiểm tra tham gia kênh (nếu bạn vẫn muốn dùng tính năng này)
+    # 1. Kiểm tra tham gia kênh
     if not await is_member(update.effective_user.id, context):
         await update.message.reply_text("🚫 Bạn chưa tham gia kênh @Nss247 để nhận mã.")
         return
 
-    # Nội dung tin nhắn theo yêu cầu của bạn
-    msg_text = (
-        "🔄 Gửi /start để cập nhật\n\n"
-        "👉 Gửi 70/250 Lấy Mã giảm 70k đơn 250k\n"
-        "👉 Gửi 50/199 Lấy Mã giảm 50k đơn 199k\n\n"
-        "💡 Mỗi loại mã bạn được nhận tối đa: 2 lần."
-    )
-    
-    # Vẫn lấy danh sách category từ API để hiển thị nút bấm cho người dùng dễ chọn
+    # 2. Gọi API lấy danh sách mã thực tế đang có trong kho
     cats = call_api('get_categories')
     
-    if cats:
-        keyboard = [[KeyboardButton(c['category'])] for c in cats]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        await update.message.reply_text(msg_text, reply_markup=reply_markup)
-    else:
-        # Nếu kho mã hoàn toàn trống, chỉ gửi tin nhắn văn bản
-        await update.message.reply_text(msg_text)
+    if not cats:
+        await update.message.reply_text("🔄 Gửi /start để cập nhật\n\nHiện tại kho mã đang tạm hết. Vui lòng quay lại sau!")
+        return
 
+    # 3. Tự động xây dựng nội dung tin nhắn dựa trên các category có sẵn
+    instruction_lines = ""
+    keyboard = []
+    
+    for c in cats:
+        cat_name = c['category']
+        # Tạo dòng hướng dẫn: 👉 Gửi [Tên mã] để nhận mã [Tên mã]
+        instruction_lines += f"👉 Gửi `{cat_name}` để nhận Mã `{cat_name}`\n"
+        # Tạo nút bấm tương ứng
+        keyboard.append([KeyboardButton(cat_name)])
+
+    # 4. Ráp thành tin nhắn hoàn chỉnh
+    message = (
+        "🔄 Gửi /start để cập nhật\n\n"
+        f"{instruction_lines}\n"
+        f"💡 Mỗi loại mã bạn được nhận tối đa: {LIMIT} lần."
+    )
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+    
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     cat = update.message.text.strip()
