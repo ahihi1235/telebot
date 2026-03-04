@@ -29,7 +29,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-
+# --- HÀM BỔ TRỢ ---
 # --- HÀM BỔ TRỢ ---
 def call_api(action, params=None, json_data=None):
     p = params or {}
