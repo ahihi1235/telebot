@@ -17,7 +17,7 @@ def run_web():
 # --- CẤU HÌNH ---
 TOKEN = os.environ.get("TOKEN")
 ADMIN_IDS = [1400175163]
-API_URL = "https://saleavn.top/api.php" 
+API_URL = "https://salevn.top/api.php" 
 SECRET_KEY = "MINH_LA_ADMIN_123"
 LIMIT = 2
 REQUIRED_CHATS = ["@Nss247", "@sansaleshopee_lazada"]
