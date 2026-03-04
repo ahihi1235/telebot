@@ -82,38 +82,46 @@ async def reset_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- USER COMMANDS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. Kiểm tra tham gia kênh
-    if not await is_member(update.effective_user.id, context):
-        await update.message.reply_text("🚫 Bạn chưa tham gia kênh @Nss247 để nhận mã.")
-        return
+    try:
+        # 1. Kiểm tra tham gia kênh
+        if not await is_member(update.effective_user.id, context):
+            await update.message.reply_text("🚫 Bạn chưa tham gia kênh yêu cầu để nhận mã.")
+            return
 
-    # 2. Gọi API lấy danh sách mã thực tế đang có trong kho
-    cats = call_api('get_categories')
-    
-    if not cats:
-        await update.message.reply_text("🔄 Gửi /start để cập nhật\n\nHiện tại kho mã đang tạm hết. Vui lòng quay lại sau!")
-        return
+        # 2. Gọi API lấy danh sách mã
+        cats = call_api('get_categories')
+        
+        # Kiểm tra an toàn: Nếu API lỗi hoặc rỗng (không phải dạng danh sách)
+        if not cats or not isinstance(cats, list) or len(cats) == 0:
+            await update.message.reply_text("🔄 Gửi /start để cập nhật\n\nHiện tại kho mã đang tạm hết. Vui lòng quay lại sau!")
+            return
 
-    # 3. Tự động xây dựng nội dung tin nhắn dựa trên các category có sẵn
-    instruction_lines = ""
-    keyboard = []
-    
-    for c in cats:
-        cat_name = c['category']
-        # Tạo dòng hướng dẫn: 👉 Gửi [Tên mã] để nhận mã [Tên mã]
-        instruction_lines += f"👉 Gửi `{cat_name}` để nhận Mã `{cat_name}`\n"
-        # Tạo nút bấm tương ứng
-        keyboard.append([KeyboardButton(cat_name)])
+        # 3. Tự động xây dựng nội dung tin nhắn
+        instruction_lines = ""
+        keyboard = []
+        
+        for c in cats:
+            # Dùng .get() an toàn, tránh lỗi nếu API trả về thiếu dữ liệu
+            cat_name = str(c.get('category', ''))
+            if cat_name:
+                instruction_lines += f"👉 Gửi {cat_name} để nhận mã {cat_name}\n"
+                keyboard.append([KeyboardButton(cat_name)])
 
-    # 4. Ráp thành tin nhắn hoàn chỉnh
-    message = (
-        "🔄 Gửi /start để cập nhật\n\n"
-        f"{instruction_lines}\n"
-        f"💡 Mỗi loại mã bạn được nhận tối đa: {LIMIT} lần."
-    )
-    
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+        # 4. Ráp thành tin nhắn hoàn chỉnh
+        message = (
+            "🔄 Gửi /start để cập nhật\n\n"
+            f"{instruction_lines}\n"
+            f"💡 Mỗi loại mã bạn được nhận tối đa: {LIMIT} lần."
+        )
+        
+        # Bỏ parse_mode="Markdown" để tránh lỗi sập bot do ký tự lạ
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text(message, reply_markup=reply_markup)
+        
+    except Exception as e:
+        # Nếu vẫn có lỗi ngầm, bot sẽ báo lỗi thay vì im lặng
+        logging.error(f"Lỗi lệnh /start: {e}")
+        await update.message.reply_text("⚠️ Đang có lỗi kết nối tải danh sách mã. Vui lòng thử lại sau!")
     
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
