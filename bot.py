@@ -2,28 +2,35 @@ import logging
 import os
 import requests
 import threading
+from datetime import datetime
 from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.constants import ParseMode
 
-# --- WEB SERVER ---
+# --- WEB SERVER (Cho Render) ---
 web_app = Flask(__name__)
 @web_app.route('/')
 def health(): return "Bot is Alive", 200
+
 def run_web(): 
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host='0.0.0.0', port=port)
 
 # --- CẤU HÌNH ---
 TOKEN = os.environ.get("TOKEN")
-ADMIN_IDS = [1400175163]
+ADMIN_IDS = [1400175163]  # ID của bạn
 API_URL = "https://salevn.top/api.php" 
 SECRET_KEY = "MINH_LA_ADMIN_123"
 LIMIT = 2
 REQUIRED_CHATS = ["@Nss247", "@sansaleshopee_lazada"]
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
+# --- HÀM BỔ TRỢ ---
 def call_api(action, params=None, json_data=None):
     p = params or {}
     p['key'] = SECRET_KEY
@@ -38,6 +45,19 @@ def call_api(action, params=None, json_data=None):
         logging.error(f"API Error ({action}): {e}")
         return None
 
+async def is_member(user_id, context: ContextTypes.DEFAULT_TYPE):
+    """Kiểm tra người dùng đã Join Group/Channel chưa"""
+    for chat_id in REQUIRED_CHATS:
+        try:
+            member = await context.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+            if member.status in ['left', 'kicked']:
+                return False
+        except Exception as e:
+            logging.error(f"Lỗi kiểm tra thành viên tại {chat_id}: {e}")
+            # Nếu bot chưa là Admin kênh, mặc định coi như chưa join để tránh lỗi logic
+            return False
+    return True
+
 # --- ADMIN COMMANDS ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
@@ -47,10 +67,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     msg = "📊 **THỐNG KÊ KHO MÃ**\n\n"
-    for item in res['links']:
+    for item in res.get('links', []):
         msg += f"🔸 {item['category']}: Còn {item['available']} - Đã phát {item['used']}\n"
-    msg += f"\n👥 Tổng người dùng: {res['total_users']}"
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    msg += f"\n👥 Tổng người dùng: {res.get('total_users', 0)}"
+    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
 async def add_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
@@ -59,7 +79,7 @@ async def add_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_line = lines[0].split()
         if len(first_line) < 2: raise Exception()
         
-        cat = first_line[1] # Ví dụ: 70/250
+        cat = first_line[1]
         urls = [l.strip() for l in lines[1:] if l.strip()]
         
         res = call_api('add_links', json_data={'category': cat, 'urls': urls})
@@ -82,65 +102,81 @@ async def reset_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- USER COMMANDS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
     try:
         # 1. Kiểm tra tham gia kênh
-        if not await is_member(update.effective_user.id, context):
-            await update.message.reply_text("🚫 Bạn chưa tham gia kênh yêu cầu để nhận mã.")
+        if not await is_member(user.id, context):
+            channels_str = "\n".join([f"👉 {c}" for c in REQUIRED_CHATS])
+            await update.message.reply_text(
+                f"🚫 **Bạn chưa tham gia kênh yêu cầu!**\n\nVui lòng tham gia các kênh sau để sử dụng bot:\n{channels_str}\n\nSau khi tham gia, hãy bấm lại /start",
+                parse_mode=ParseMode.MARKDOWN
+            )
             return
 
-        # 2. Gọi API lấy danh sách mã
+        # 2. Lấy danh sách mã từ API
         cats = call_api('get_categories')
         
-        # Kiểm tra an toàn: Nếu API lỗi hoặc rỗng (không phải dạng danh sách)
         if not cats or not isinstance(cats, list) or len(cats) == 0:
-            await update.message.reply_text("🔄 Gửi /start để cập nhật\n\nHiện tại kho mã đang tạm hết. Vui lòng quay lại sau!")
+            await update.message.reply_text("🔄 Hiện tại kho mã đang tạm hết. Vui lòng quay lại sau!")
             return
 
-        # 3. Tự động xây dựng nội dung tin nhắn
+        # 3. Xây dựng giao diện nút bấm
         instruction_lines = ""
         keyboard = []
-        
         for c in cats:
-            # Dùng .get() an toàn, tránh lỗi nếu API trả về thiếu dữ liệu
             cat_name = str(c.get('category', ''))
             if cat_name:
-                instruction_lines += f"👉 Gửi {cat_name} để nhận mã {cat_name}\n"
+                instruction_lines += f"🔹 Gửi **{cat_name}** để nhận mã\n"
                 keyboard.append([KeyboardButton(cat_name)])
 
-        # 4. Ráp thành tin nhắn hoàn chỉnh
         message = (
-            "🔄 Gửi /start để cập nhật\n\n"
+            "👋 Chào mừng bạn đến với Bot lấy mã!\n\n"
             f"{instruction_lines}\n"
-            f"💡 Mỗi loại mã bạn được nhận tối đa: {LIMIT} lần."
+            f"💡 Giới hạn: {LIMIT} lần/loại mã."
         )
         
-        # Bỏ parse_mode="Markdown" để tránh lỗi sập bot do ký tự lạ
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        await update.message.reply_text(message, reply_markup=reply_markup)
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
         
     except Exception as e:
-        # Nếu vẫn có lỗi ngầm, bot sẽ báo lỗi thay vì im lặng
         logging.error(f"Lỗi lệnh /start: {e}")
-        await update.message.reply_text("⚠️ Đang có lỗi kết nối tải danh sách mã. Vui lòng thử lại sau!")
-    
+        await update.message.reply_text("⚠️ Có lỗi kỹ thuật, vui lòng thử lại sau.")
+
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    user = update.effective_user
     cat = update.message.text.strip()
-    res = call_api('claim_link', {'user_id': user_id, 'category': cat, 'limit': LIMIT})
+    
+    # Lấy thông tin người dùng để lưu log
+    username = f"@{user.username}" if user.username else "N/A"
+    full_name = user.full_name
+    
+    # Gửi yêu cầu lấy mã kèm thông tin người dùng lên API
+    res = call_api('claim_link', {
+        'user_id': user.id, 
+        'username': username, 
+        'full_name': full_name,
+        'category': cat, 
+        'limit': LIMIT
+    })
     
     if not res:
         await update.message.reply_text("❌ Lỗi kết nối máy chủ.")
         return
 
-    if res.get('status') == 'success':
-        await update.message.reply_text(f"🎁 Link {cat}:\n{res['url']}")
-    elif res.get('status') == 'limit_reached':
+    status = res.get('status')
+    if status == 'success':
+        await update.message.reply_text(f"🎁 **Link {cat} của bạn:**\n{res['url']}", parse_mode=ParseMode.MARKDOWN)
+        logging.info(f"PHÁT MÃ: {username} lấy {cat}")
+    elif status == 'limit_reached':
         await update.message.reply_text(f"🚫 Bạn đã nhận tối đa {LIMIT} lần cho loại mã này.")
     else:
-        await update.message.reply_text("Mã này đã hết hoặc không tồn tại.")
+        await update.message.reply_text("❌ Mã này đã hết hoặc không tồn tại.")
 
 def main():
+    # Chạy Web Server song song để Render không kill bot
     threading.Thread(target=run_web, daemon=True).start()
+    
+    # Khởi tạo Bot
     app = Application.builder().token(TOKEN).build()
     
     # Đăng ký lệnh Admin
@@ -156,4 +192,5 @@ def main():
     print("Bot is running...")
     app.run_polling()
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    main()
