@@ -173,23 +173,28 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Mã này đã hết hoặc không tồn tại.")
 
 def main():
-    # Chạy Web Server song song để Render không kill bot
+    # Chạy Web Server song song
     threading.Thread(target=run_web, daemon=True).start()
     
     # Khởi tạo Bot
     app = Application.builder().token(TOKEN).build()
     
-    # Đăng ký lệnh Admin
-    app.add_handler(CommandHandler("add", add_links))
-    app.add_handler(CommandHandler("status", status))
-    app.add_handler(CommandHandler("reset_users", reset_handler))
-    app.add_handler(CommandHandler("resetall", reset_handler))
+    # --- CHỈ PHẢN HỒI TRONG CHAT RIÊNG (PRIVATE CHAT) ---
+    private_filter = filters.ChatType.PRIVATE
+
+    # Đăng ký lệnh Admin (Chỉ cho phép nhắn riêng)
+    app.add_handler(CommandHandler("add", add_links, filters=private_filter))
+    app.add_handler(CommandHandler("status", status, filters=private_filter))
+    app.add_handler(CommandHandler("reset_users", reset_handler, filters=private_filter))
+    app.add_handler(CommandHandler("resetall", reset_handler, filters=private_filter))
     
-    # Lệnh User
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
+    # Lệnh User (Chỉ cho phép nhắn riêng)
+    app.add_handler(CommandHandler("start", start, filters=private_filter))
     
-    print("Bot is running...")
+    # MessageHandler: Chỉ xử lý tin nhắn TEXT, KHÔNG PHẢI COMMAND và PHẢI LÀ CHAT RIÊNG
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, handle_msg))
+    
+    print("Bot is running in Private mode...")
     app.run_polling()
 
 if __name__ == '__main__':
