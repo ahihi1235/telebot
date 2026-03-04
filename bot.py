@@ -15,7 +15,7 @@ def run_web(): os.environ.get("PORT", 8080); web_app.run(host='0.0.0.0', port=80
 # --- CẤU HÌNH ---
 TOKEN = os.environ.get("TOKEN")
 ADMIN_IDS = [1400175163]
-API_URL = "https://saleavn.top/api.php" # Thay bằng link file của bạn
+API_URL = "https://saleavn.top/telebot.php" # Thay bằng link file của bạn
 API_KEY = "MINH_LA_ADMIN_123"
 LIMIT_PER_CATEGORY = 2
 REQUIRED_CHATS = ["@Nss247", "@sansaleshopee_lazada"]
