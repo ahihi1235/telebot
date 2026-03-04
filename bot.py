@@ -126,13 +126,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for c in cats:
             cat_name = str(c.get('category', ''))
             if cat_name:
-                instruction_lines += f"🔹 Gửi **{cat_name}** để nhận mã\n"
+                instruction_lines += f"- **{cat_name}** \n"
                 keyboard.append([KeyboardButton(cat_name)])
 
         message = (
-            "👋 Chào mừng bạn đến với Bot lấy mã!\n\n"
+            "👋 gửi tin theo cú pháp bên dưới để lấy mã\n\n"
             f"{instruction_lines}\n"
-            f"💡 Giới hạn: {LIMIT} lần/loại mã."
+            f"💡 Giới hạn: {LIMIT} code mỗi loại"
         )
         
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
