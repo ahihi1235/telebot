@@ -82,13 +82,29 @@ async def reset_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- USER COMMANDS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cats = call_api('get_categories')
-    if not cats:
-        await update.message.reply_text("Kho mã hiện đang trống.")
+    # Kiểm tra tham gia kênh (nếu bạn vẫn muốn dùng tính năng này)
+    if not await is_member(update.effective_user.id, context):
+        await update.message.reply_text("🚫 Bạn chưa tham gia kênh @Nss247 để nhận mã.")
         return
 
-    keyboard = [[KeyboardButton(c['category'])] for c in cats]
-    await update.message.reply_text("Chọn loại mã:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    # Nội dung tin nhắn theo yêu cầu của bạn
+    msg_text = (
+        "🔄 Gửi /start để cập nhật\n\n"
+        "👉 Gửi 70/250 Lấy Mã giảm 70k đơn 250k\n"
+        "👉 Gửi 50/199 Lấy Mã giảm 50k đơn 199k\n\n"
+        "💡 Mỗi loại mã bạn được nhận tối đa: 2 lần."
+    )
+    
+    # Vẫn lấy danh sách category từ API để hiển thị nút bấm cho người dùng dễ chọn
+    cats = call_api('get_categories')
+    
+    if cats:
+        keyboard = [[KeyboardButton(c['category'])] for c in cats]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text(msg_text, reply_markup=reply_markup)
+    else:
+        # Nếu kho mã hoàn toàn trống, chỉ gửi tin nhắn văn bản
+        await update.message.reply_text(msg_text)
 
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
